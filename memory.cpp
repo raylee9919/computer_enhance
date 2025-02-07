@@ -30,13 +30,8 @@ init_arena(Memory_Arena *arena, mmm size)
     memset(arena->base, 0, size);
 }
 
-static void
-free_arena(Memory_Arena *arena)
-{
-    free(arena->base);
-}
-
 #define push_struct(ARENA, STRUCT) (STRUCT *)push_size(ARENA, sizeof(STRUCT))
+#define push_array(ARENA, STRUCT, COUNT) (STRUCT *)push_size(ARENA, sizeof(STRUCT)*COUNT)
 static void *
 push_size(Memory_Arena *arena, mmm size)
 {

@@ -19,12 +19,13 @@
 #include "memory.cpp"
 #include "profiler.cpp"
 #include "haversine_shared.cpp"
+#include "json_parser.cpp"
 
-struct Buffer
+static f64
+abs(f64 x)
 {
-    mmm size;
-    u8 *data;
-};
+    return ((x > 0) ? x : -x);
+}
 
 internal Buffer
 read_entire_file_and_null_terminate(const char *filename, Memory_Arena *arena)
@@ -51,415 +52,6 @@ read_entire_file_and_null_terminate(const char *filename, Memory_Arena *arena)
     return result;
 }
 
-internal b32
-is_whitespace(char c)
-{
-    time_function();
-    return (c == ' '  || c == '\n' || c == '\r' || c == '\t');
-}
-
-internal b32
-is_number(char c)
-{
-    time_function();
-    return (c >= '0' && c <= '9');
-}
-
-enum Token_Type
-{
-    Token_Type_EOF,
-    Token_Type_Invalid,
-    Token_Type_Left_Brace,
-    Token_Type_Right_Brace,
-    Token_Type_Left_Bracket,
-    Token_Type_Right_Bracket,
-    Token_Type_Comma,
-    Token_Type_Colon,
-    Token_Type_String,
-    Token_Type_Number,
-};
-
-struct Token
-{
-    Token_Type type;
-    Buffer data;
-};
-
-struct Tokenizer
-{
-    u8 *at;
-};
-
-internal Buffer
-push_char(char c, Memory_Arena *arena)
-{
-    time_function();
-
-    Buffer result = {};
-
-    char *x = push_struct(arena, char);
-    *x = c;
-
-    result.data = (u8 *)x;
-    result.size = 1;
-    return result;
-}
-
-internal Buffer
-push_string(char *begin, char *end, Memory_Arena *arena)
-{
-    time_function();
-
-    Buffer result = {};
-
-    mmm length = (end - begin);
-    char *data = (char *)push_size(arena, length);
-    for (u32 i = 0; i < length; ++i)
-        data[i] = begin[i];
-
-    result.data = (u8 *)data;
-    result.size = length;
-    return result;
-}
-
-internal void
-push_token(Tokenizer *tokenizer, Token_Type type,
-           Memory_Arena *token_arena, Memory_Arena *literal_arena)
-{
-    time_function();
-
-    Token *tk = push_struct(token_arena, Token);
-    tk->type = type;
-    switch (type)
-    {
-        case Token_Type_EOF:
-        case Token_Type_Invalid:
-        {
-            tk->data = Buffer{};
-        } break;;
-
-        case Token_Type_Left_Brace:
-        {
-            tk->data = push_char('{', literal_arena);
-            ++tokenizer->at;
-        } break;
-
-        case Token_Type_Right_Brace:
-        {
-            tk->data = push_char('}', literal_arena);
-            ++tokenizer->at;
-        } break;
-
-        case Token_Type_Left_Bracket:
-        {
-            tk->data = push_char('[', literal_arena);
-            ++tokenizer->at;
-        } break;
-
-        case Token_Type_Right_Bracket:
-        {
-            tk->data = push_char(']', literal_arena);
-            ++tokenizer->at;
-        } break;
-
-        case Token_Type_Comma:
-        {
-            tk->data = push_char(',', literal_arena);
-            ++tokenizer->at;
-        } break;
-
-        case Token_Type_Colon:
-        {
-            tk->data = push_char(':', literal_arena);
-            ++tokenizer->at;
-        } break;
-
-        case Token_Type_String:
-        {
-            char* start = (char *)++tokenizer->at;
-            while (*tokenizer->at != '"')
-                ++tokenizer->at;
-            char *end = (char *)tokenizer->at;
-            tk->data = push_string(start, end, literal_arena);
-            ++tokenizer->at;
-        } break;
-
-        case Token_Type_Number:
-        {
-            tk->data.data = (u8 *)push_struct(literal_arena, f64);
-            tk->data.size = sizeof(f64);
-            f64 n = 0.0;
-            while (is_number(*tokenizer->at))
-            {
-                n = n * 10.0 + (f64)(*tokenizer->at - '0');
-                ++tokenizer->at;
-            }
-
-            if (*tokenizer->at == '.')
-                ++tokenizer->at;
-
-            f64 m = 0.1;
-            while (is_number(*tokenizer->at))
-            {
-                n += m * (f64)(*tokenizer->at - '0');
-                ++tokenizer->at;
-                m /= 10.0;
-            }
-
-            *((f64 *)tk->data.data) = n;
-        } break;
-
-        invalid_default_case;
-    }
-}
-
-internal void
-tokenize(Buffer buffer, Memory_Arena *token_arena, Memory_Arena *literal_arena)
-{
-    time_function();
-
-    Tokenizer tk = {};
-    tk.at = buffer.data;
-
-    for (;;)
-    {
-        switch (*tk.at)
-        {
-            case 0: 
-            {
-                push_token(&tk, Token_Type_EOF, token_arena, literal_arena);
-                return;
-            } break;
-
-            case '{':
-            {
-                push_token(&tk, Token_Type_Left_Brace, token_arena, literal_arena);
-            } break;
-
-            case '}':
-            {
-                push_token(&tk, Token_Type_Right_Brace, token_arena, literal_arena);
-            } break;
-
-            case '[':
-            {
-                push_token(&tk, Token_Type_Left_Bracket, token_arena, literal_arena);
-            } break;
-
-            case ']':
-            {
-                push_token(&tk, Token_Type_Right_Bracket, token_arena, literal_arena);
-            } break;
-
-            case ',':
-            {
-                push_token(&tk, Token_Type_Comma, token_arena, literal_arena);
-            } break;
-
-            case ':':
-            {
-                push_token(&tk, Token_Type_Colon, token_arena, literal_arena);
-            } break;
-
-            default:
-            {
-                if (is_whitespace(*tk.at))
-                {
-                    ++tk.at;
-                }
-                else if (*tk.at == '"')
-                {
-                    push_token(&tk, Token_Type_String, token_arena, literal_arena);
-                }
-                else if (is_number(*tk.at))
-                {
-                    push_token(&tk, Token_Type_Number, token_arena, literal_arena);
-                }
-                else
-                {
-                    invalid_code_path;
-                }
-            } break;
-        }
-    }
-}
-
-internal void
-DEBUG_print_tokens(Memory_Arena *arena)
-{
-    Token *tk = (Token *)arena->base;
-    for (;;)
-    {
-        switch (tk->type)
-        {
-            case Token_Type_EOF:
-            {
-                printf("EOF\n");
-                return;
-            } break;
-            case Token_Type_Invalid:
-            {
-                printf("Invalid\n");
-            } break;
-            case Token_Type_Left_Brace:
-            case Token_Type_Right_Brace:
-            case Token_Type_Left_Bracket:
-            case Token_Type_Right_Bracket:
-            case Token_Type_Comma:
-            case Token_Type_Colon:
-            case Token_Type_String:
-            {
-                printf("%.*s\n", (s32)tk->data.size, tk->data.data);
-            } break;
-            case Token_Type_Number:
-            {
-                printf("%.16f\n", *(f64 *)tk->data.data);
-            } break;
-        }
-
-        ++tk;
-    }
-}
-
-struct Parser
-{
-    Token *at;
-
-    Token eat()
-    {
-        return (*at++);
-    }
-};
-
-struct Json_Value
-{
-};
-
-struct Json_Object
-{
-};
-
-struct Json_Array
-{
-};
-
-internal Json_Value *
-parse_value(Parser *parser, Memory_Arena *token_arena, Memory_Arena *data_arena)
-{
-    Json_Value *result;
-
-    return result;
-}
-
-internal Json_Object *
-parse_object(Parser *parser, Memory_Arena *token_arena, Memory_Arena *data_arena)
-{
-    Json_Object *result = push_struct(data_arena, Json_Object);
-
-        if (parser->eat().type == Token_Type_String)
-        {
-            for (;;)
-            {
-                if (parser->eat().type == Token_Type_String)
-                {
-                    if (parser->eat().type == Token_Type_Colon)
-                    {
-                        Json_Value *value = parse_value(parser, token_arena, data_arena);
-                    }
-                    else
-                    {
-                        invalid_code_path;
-                    }
-                }
-                else
-                {
-                    invalid_code_path;
-                }
-            }
-        }
-
-    return result;
-}
-
-internal Json_Array *
-parse_array(Parser *parser, Memory_Arena *token_arena, Memory_Arena *data_arena)
-{
-    Json_Array *result = push_struct(data_arena, Json_Array);
-
-    return result;
-}
-
-internal void
-parse_string(Parser *parser)
-{
-}
-
-internal void
-parse_number(Parser *parser)
-{
-}
-
-internal void
-parse(Memory_Arena *token_arena, Memory_Arena *data_arena)
-{
-    Parser parser = {};
-    parser.at = (Token *)token_arena->base;
-    for (;;)
-    {
-        Token tk = *parser.at;
-        switch (tk.type)
-        {
-            case Token_Type_EOF:
-            {
-                return;
-            } break;
-
-            case Token_Type_Invalid:
-            {
-                invalid_code_path;
-            } break;
-
-            case Token_Type_Left_Brace:
-            {
-                parse_object(&parser, token_arena, data_arena);
-            } break;
-
-            case Token_Type_Left_Bracket:
-            {
-                parse_array(&parser, token_arena, data_arena);
-            } break;
-
-            case Token_Type_String:
-            {
-                parse_string(&parser);
-            } break;
-
-            case Token_Type_Number:
-            {
-                parse_number(&parser);
-            } break;
-
-            invalid_default_case;
-        }
-
-        ++parser.at;
-    }
-}
-
-/*
-    What am I trying to accomplish here. THe more you are concrete about, 
-    the clearer of how to code it. What does it mean 
- */
-
-struct Haversine_Coordiante_Pair
-{
-    f32 x0, y0, x1, y1;
-};
-
-// Process million pairs generated from json input. How do you know it's haversine
-// object? 
-// 1. Spec our program to be gauranteed to take haversine pairs only.
-// 2. match with "name" : ...
 //
 // OBJECT
 // { STRING : VALUE }
@@ -471,6 +63,65 @@ struct Haversine_Coordiante_Pair
 //
 // VALUE
 // STRING|NUMBER|OBJECT|ARRAY|TRUE|FALSE|NULL
+//
+
+struct Haversine_Pair
+{
+    f64 x0, y0, x1, y1;
+};
+
+static f64
+get_haversine_sum_from_json(Json_Object object, Memory_Arena *arena)
+{
+    time_function();
+    f64 result = 0.0;
+ 
+    if (object.strings[0] == "pairs")
+    {
+        Json_Value val = object.values[0];
+        u64 pairs_count = val.array.used;
+        Haversine_Pair *pairs = push_array(arena, Haversine_Pair, pairs_count);
+        for (u32 idx = 0; idx < pairs_count; ++idx)
+        {
+            Json_Object pair = val.array.values[idx].object;
+            for (u32 i = 0; i < 4; ++i)
+            {
+                if (pair.strings[i] == "x0")
+                {
+                    pairs[idx].x0 = pair.values[i].number;
+                }
+                else if (pair.strings[i] == "y0")
+                {
+                    pairs[idx].y0 = pair.values[i].number;
+                }
+                else if (pair.strings[i] == "x1")
+                {
+                    pairs[idx].x1 = pair.values[i].number;
+                }
+                else if (pair.strings[i] == "y1")
+                {
+                    pairs[idx].y1 = pair.values[i].number;
+                }
+                else
+                {
+                    invalid_code_path;
+                }
+            }
+        }
+
+        for (u32 idx = 0; idx < pairs_count; ++idx)
+        {
+            Haversine_Pair pair = pairs[idx];
+            result += haversine(pair.x0, pair.y0, pair.x1, pair.y1);
+        }
+    }
+    else
+    {
+        invalid_code_path;
+    }
+
+    return result;
+}
 
 int main(void)
 {
@@ -479,22 +130,31 @@ int main(void)
     Memory_Arena file_arena = {};
     init_arena(&file_arena, MB(500));
 
-    Buffer entire_file = read_entire_file_and_null_terminate(haversine_json_filename, &file_arena);
-    if (entire_file.data)
+    Buffer json_file = read_entire_file_and_null_terminate(haversine_json_filename, &file_arena);
+    if (json_file.data)
     {
         Memory_Arena token_arena = {};
         Memory_Arena literal_arena = {};
         Memory_Arena data_arena = {};
+        Memory_Arena haversine_arena = {};
 
         init_arena(&token_arena, GB(1));
         init_arena(&literal_arena, MB(50));
-        init_arena(&data_arena, MB(50));
+        init_arena(&data_arena, GB(1));
+        init_arena(&haversine_arena, MB(50));
 
-        tokenize(entire_file, &token_arena, &literal_arena);
-        free_arena(&file_arena);
+        tokenize(json_file, &token_arena, &literal_arena);
         // DEBUG_print_tokens(&token_arena);
 
-        parse(&token_arena, &data_arena);
+        Json_Object root_object = parse_json(&token_arena, &data_arena);
+        f64 haversine_sum = get_haversine_sum_from_json(root_object, &haversine_arena);
+
+        Buffer answer_file = read_entire_file_and_null_terminate(haversine_answer_filename, &file_arena);
+        Stream answer_stream = {};
+        answer_stream.at = answer_file.data;
+        f64 expected_haversine_sum = json_get_number_from_stream(&answer_stream);
+
+        printf("Expected: %.16f km\nActual  : %.16f km\nError   : %.16f km\n", expected_haversine_sum, haversine_sum, abs(haversine_sum - expected_haversine_sum));
     }
     else
     {
@@ -502,5 +162,4 @@ int main(void)
     }
 
     end_and_print_profile();
-    return 0;
 }

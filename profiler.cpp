@@ -103,7 +103,7 @@
           if (anchor->tsc_elapsed_inclusive)
           {
               f64 percent = 100.0 * ((f64)anchor->tsc_elapsed_exclusive / (f64)total_cpu_elapsed);
-              printf("%s[%llu]: %llu (%.2f%%", anchor->label, anchor->hit_count, anchor->tsc_elapsed_exclusive, percent);
+              printf("  %s[%llu]: %llu (%.2f%%", anchor->label, anchor->hit_count, anchor->tsc_elapsed_exclusive, percent);
               if (anchor->tsc_elapsed_inclusive != anchor->tsc_elapsed_exclusive)
               {
                   percent = 100.0 * ((f64)anchor->tsc_elapsed_inclusive / (f64)total_cpu_elapsed);

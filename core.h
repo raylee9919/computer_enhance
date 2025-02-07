@@ -53,4 +53,69 @@ typedef intptr_t  smm;
 #define invalid_default_case default: { invalid_code_path; } break
 
 
+struct Buffer
+{
+    mmm size;
+    u8 *data;
+};
+typedef Buffer String;
+
+struct Stream
+{
+    u8 *at;
+};
+
+static mmm
+string_length(const char *str)
+{
+    mmm result = 0;
+    const char *at = str;
+    while (*at != 0)
+    {
+        ++at;
+        ++result;
+    }
+    return result;
+}
+
+static b32
+operator == (String a, String b)
+{
+    if (a.size == b.size)
+    {
+        for (u32 idx = 0; idx < a.size; ++idx)
+        {
+            if (a.data[idx] != b.data[idx])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+static b32
+operator == (String a, const char *b)
+{
+    if (a.size == string_length(b))
+    {
+        for (u32 idx = 0; idx < a.size; ++idx)
+        {
+            if (((char *)a.data)[idx] != b[idx])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 #endif // CORE_H_
