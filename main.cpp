@@ -324,7 +324,80 @@ DEBUG_print_tokens(Memory_Arena *arena)
 struct Parser
 {
     Token *at;
+
+    Token eat()
+    {
+        return (*at++);
+    }
 };
+
+struct Json_Value
+{
+};
+
+struct Json_Object
+{
+};
+
+struct Json_Array
+{
+};
+
+internal Json_Value *
+parse_value(Parser *parser, Memory_Arena *token_arena, Memory_Arena *data_arena)
+{
+    Json_Value *result;
+
+    return result;
+}
+
+internal Json_Object *
+parse_object(Parser *parser, Memory_Arena *token_arena, Memory_Arena *data_arena)
+{
+    Json_Object *result = push_struct(data_arena, Json_Object);
+
+        if (parser->eat().type == Token_Type_String)
+        {
+            for (;;)
+            {
+                if (parser->eat().type == Token_Type_String)
+                {
+                    if (parser->eat().type == Token_Type_Colon)
+                    {
+                        Json_Value *value = parse_value(parser, token_arena, data_arena);
+                    }
+                    else
+                    {
+                        invalid_code_path;
+                    }
+                }
+                else
+                {
+                    invalid_code_path;
+                }
+            }
+        }
+
+    return result;
+}
+
+internal Json_Array *
+parse_array(Parser *parser, Memory_Arena *token_arena, Memory_Arena *data_arena)
+{
+    Json_Array *result = push_struct(data_arena, Json_Array);
+
+    return result;
+}
+
+internal void
+parse_string(Parser *parser)
+{
+}
+
+internal void
+parse_number(Parser *parser)
+{
+}
 
 internal void
 parse(Memory_Arena *token_arena, Memory_Arena *data_arena)
@@ -348,12 +421,12 @@ parse(Memory_Arena *token_arena, Memory_Arena *data_arena)
 
             case Token_Type_Left_Brace:
             {
-                parse_object(&parser);
+                parse_object(&parser, token_arena, data_arena);
             } break;
 
             case Token_Type_Left_Bracket:
             {
-                parse_array(&parser);
+                parse_array(&parser, token_arena, data_arena);
             } break;
 
             case Token_Type_String:
@@ -372,6 +445,32 @@ parse(Memory_Arena *token_arena, Memory_Arena *data_arena)
         ++parser.at;
     }
 }
+
+/*
+    What am I trying to accomplish here. THe more you are concrete about, 
+    the clearer of how to code it. What does it mean 
+ */
+
+struct Haversine_Coordiante_Pair
+{
+    f32 x0, y0, x1, y1;
+};
+
+// Process million pairs generated from json input. How do you know it's haversine
+// object? 
+// 1. Spec our program to be gauranteed to take haversine pairs only.
+// 2. match with "name" : ...
+//
+// OBJECT
+// { STRING : VALUE }
+// { STRING : VALUE , STRING : VALUE , STRING : VALUE }
+//
+// ARRAY
+// [ VALUE ]
+// [ VALUE, VALUE, VALUE ]
+//
+// VALUE
+// STRING|NUMBER|OBJECT|ARRAY|TRUE|FALSE|NULL
 
 int main(void)
 {
