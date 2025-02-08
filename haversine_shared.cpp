@@ -8,6 +8,7 @@
    
    ======================================================================== */
 
+#include "haversine_filename.inl"
 
 static double
 square(double x) 
@@ -42,6 +43,3 @@ haversine(double x0, double y0, double x1, double y1, double earth_radius = 6372
     
     return result;
 }
-
-const char *haversine_json_filename = "haversine_input.json";
-const char *haversine_answer_filename = "haversine_answer.f64";
